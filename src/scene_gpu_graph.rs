@@ -507,9 +507,23 @@ fn texture_candidates(token: &str) -> Vec<String> {
     }
 
     let mut cands = Vec::<String>::new();
-    let has_ext = Path::new(t).extension().is_some();
+    let ext = Path::new(t)
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase());
+    let has_known_ext = matches!(
+        ext.as_deref(),
+        Some("tex")
+            | Some("tex-json")
+            | Some("png")
+            | Some("jpg")
+            | Some("jpeg")
+            | Some("webp")
+            | Some("bmp")
+            | Some("tga")
+            | Some("gif")
+    );
 
-    if has_ext {
+    if has_known_ext {
         cands.push(t.to_string());
         cands.push(format!("materials/{t}"));
         cands.push(format!("assets/materials/{t}"));

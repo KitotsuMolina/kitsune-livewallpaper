@@ -9,8 +9,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const EFFECT_LAYER_LIMIT: usize = 1;
-const EFFECT_LAYER_ALPHA: f32 = 0.35;
+const EFFECT_LAYER_LIMIT: usize = 3;
+const EFFECT_LAYER_ALPHA: f32 = 0.70;
 const DEFAULT_CONTRAST: f32 = 1.01;
 const DEFAULT_SATURATION: f32 = 1.02;
 
@@ -80,8 +80,8 @@ struct VisualTuning {
 impl Default for VisualTuning {
     fn default() -> Self {
         Self {
-            drift_amp_x: 3.0,
-            drift_amp_y: 2.0,
+            drift_amp_x: 6.0,
+            drift_amp_y: 4.0,
             drift_freq_x: 1.7,
             drift_freq_y: 1.4,
             contrast: DEFAULT_CONTRAST,
@@ -198,7 +198,7 @@ fn visual_tuning_from_graph(graph: &SceneGpuGraph) -> VisualTuning {
     }
     tuning.saturation = (1.0 + (bright - 1.0) * 0.14).clamp(0.70, 1.45);
     tuning.contrast = (1.0 + (power - 1.0) * 0.08).clamp(0.85, 1.35);
-    tuning.layer_alpha = (alpha * 0.45).clamp(0.10, 0.65);
+    tuning.layer_alpha = (alpha * 0.90).clamp(0.25, 0.95);
     tuning
 }
 
@@ -218,6 +218,12 @@ fn collect_effect_layer_refs(scene: &Value, max_candidates: usize) -> Vec<Effect
                 .and_then(|v| v.as_str())
                 .unwrap_or_default();
             let profile = infer_motion_profile(file);
+            let profile_alpha = match profile {
+                MotionProfile::Iris => 0.92,
+                MotionProfile::Shake => 0.88,
+                MotionProfile::Pulse => 0.72,
+                MotionProfile::Drift => EFFECT_LAYER_ALPHA,
+            };
             let Some(passes) = effect.get("passes").and_then(|v| v.as_array()) else {
                 continue;
             };
@@ -236,7 +242,7 @@ fn collect_effect_layer_refs(scene: &Value, max_candidates: usize) -> Vec<Effect
                             out.push(EffectLayerRef {
                                 texture_ref: trimmed.to_string(),
                                 profile,
-                                alpha: EFFECT_LAYER_ALPHA,
+                                alpha: profile_alpha,
                                 family: "legacy-effects".to_string(),
                                 center_x: 0.0,
                                 center_y: 0.0,
@@ -336,15 +342,15 @@ fn filter_for_profile(
     match profile {
         MotionProfile::Iris => format!(
             "[{src}]crop=iw-10:ih-10:x='5+sin(t*2.9)*{:.3}':y='5+cos(t*2.5)*{:.3}',pad=iw+10:ih+10:5:5:color=black@0[{out}]",
-            (tuning.drift_amp_x * 1.15).clamp(2.0, 12.0),
-            (tuning.drift_amp_y * 1.10).clamp(1.5, 10.0)
+            (tuning.drift_amp_x * 1.75).clamp(4.0, 18.0),
+            (tuning.drift_amp_y * 1.60).clamp(3.0, 16.0)
         ),
         MotionProfile::Shake => format!(
             "[{src}]crop=iw-6:ih-6:x='3+sin(t*{:.3})*{:.3}':y='3+cos(t*{:.3})*{:.3}',pad=iw+6:ih+6:3:3:color=black@0[{out}]",
             (tuning.drift_freq_x * 2.7).clamp(3.0, 14.0),
-            (tuning.drift_amp_x * 0.85).clamp(1.0, 6.0),
+            (tuning.drift_amp_x * 1.20).clamp(2.0, 10.0),
             (tuning.drift_freq_y * 2.8).clamp(3.0, 14.0),
-            (tuning.drift_amp_y * 0.90).clamp(1.0, 6.0)
+            (tuning.drift_amp_y * 1.25).clamp(2.0, 10.0)
         ),
         MotionProfile::Pulse => format!(
             "[{src}]crop=iw-8:ih-8:x='4+sin(t*{:.3})*{:.3}':y='4+cos(t*{:.3})*{:.3}',pad=iw+8:ih+8:4:4:color=black@0[{out}]",

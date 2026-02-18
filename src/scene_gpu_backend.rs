@@ -8,6 +8,7 @@ use crate::scene_effect_proxy::{
 use crate::scene_gpu_graph::build_scene_gpu_graph;
 use crate::scene_native_renderer::{render_native_animated_proxy, render_native_static_frame};
 use crate::scene_native_runtime::build_native_runtime_plan;
+use crate::scene_plan::build_scene_plan;
 use crate::scene_pkg::{extract_entry_to_cache, parse_scene_pkg};
 use crate::scene_renderer::build_scene_render_session;
 use crate::scene_text::{build_scene_drawtext_filter, start_text_refresh_daemon};
@@ -64,32 +65,6 @@ fn is_mpv_playable_visual(path: &Path) -> bool {
     )
 }
 
-fn find_preview_fallback(root: &Path) -> Option<PathBuf> {
-    let candidates = [
-        "preview.mp4",
-        "preview.webm",
-        "preview.mkv",
-        "preview.mov",
-        "preview.avi",
-        "preview.gif",
-        "preview.jpg",
-        "preview.jpeg",
-        "preview.png",
-        "preview.webp",
-        "thumbnail.jpg",
-        "thumbnail.jpeg",
-        "thumbnail.png",
-        "thumbnail.webp",
-    ];
-    for name in candidates {
-        let p = root.join(name);
-        if p.is_file() && is_mpv_playable_visual(&p) {
-            return Some(p);
-        }
-    }
-    None
-}
-
 fn pick_pkg_path(root: &Path) -> Option<PathBuf> {
     if root.join("scene.pkg").is_file() {
         Some(root.join("scene.pkg"))
@@ -98,6 +73,60 @@ fn pick_pkg_path(root: &Path) -> Option<PathBuf> {
     } else {
         None
     }
+}
+
+fn proxy_looks_suspicious(path: &Path) -> bool {
+    let Ok(img) = image::open(path) else {
+        return false;
+    };
+    let rgb = img.to_rgb8();
+    let (w, h) = rgb.dimensions();
+    if w == 0 || h == 0 {
+        return false;
+    }
+
+    let step_x = (w / 320).max(1);
+    let step_y = (h / 180).max(1);
+    let mut n = 0f64;
+    let mut sum_delta = 0f64;
+    let mut sum_l = 0f64;
+    let mut sum_l2 = 0f64;
+    for y in (0..h).step_by(step_y as usize) {
+        for x in (0..w).step_by(step_x as usize) {
+            let p = rgb.get_pixel(x, y);
+            let r = p[0] as f64;
+            let g = p[1] as f64;
+            let b = p[2] as f64;
+            sum_delta += (r - g).abs() + (g - b).abs() + (r - b).abs();
+            let l = (r + g + b) / 3.0;
+            sum_l += l;
+            sum_l2 += l * l;
+            n += 1.0;
+        }
+    }
+    if n <= 1.0 {
+        return false;
+    }
+    let avg_delta = sum_delta / (n * 3.0);
+    let mean_l = sum_l / n;
+    let var_l = (sum_l2 / n) - (mean_l * mean_l);
+    let std_l = var_l.max(0.0).sqrt();
+
+    // Suspicious pattern seen in broken TEX raw extraction: monochrome + very noisy.
+    avg_delta < 2.0 && std_l > 45.0
+}
+
+fn is_likely_albedo_texture(path: &str) -> bool {
+    let p = path.to_ascii_lowercase();
+    if p.contains("/masks/")
+        || p.contains("/effects/")
+        || p.contains("normal")
+        || p.contains("mask_")
+        || p.contains("_rt_")
+    {
+        return false;
+    }
+    true
 }
 
 fn collect_related_assets(graph: &crate::scene_gpu_graph::SceneGpuGraph) -> Vec<String> {
@@ -303,8 +332,6 @@ No se recomienda su activacion por ahora. Si quieres espectros de audio estables
     let mut native_static_report_path: Option<String> = None;
 
     let visual_path = PathBuf::from(&session.visual_asset_path);
-    let preview_fallback = find_preview_fallback(&args.root);
-
     let entry_to_launch = if is_mpv_playable_visual(&visual_path) {
         visual_path.to_string_lossy().to_string()
     } else if visual_path
@@ -314,26 +341,76 @@ No se recomienda su activacion por ahora. Si quieres espectros de audio estables
         == Some("tex")
     {
         let proxy_dir = Path::new(&session.session_dir).join("proxy");
-        if let Some(proxy_from_tex) = extract_playable_proxy_from_tex(&visual_path, &proxy_dir)? {
+        if let Some(mut proxy_from_tex) = extract_playable_proxy_from_tex(&visual_path, &proxy_dir)? {
+            if proxy_looks_suspicious(&proxy_from_tex) {
+                eprintln!(
+                    "[warn] gpu-play: extracted primary tex proxy looks suspicious (likely monochrome noise): {}",
+                    proxy_from_tex.display()
+                );
+                if let Ok(plan) = build_scene_plan(&args.root)
+                    && let Some(pkg_path) = pick_pkg_path(&args.root)
+                    && let Ok(pkg) = parse_scene_pkg(&pkg_path)
+                {
+                    let skip = visual_path
+                        .file_name()
+                        .map(|v| v.to_string_lossy().to_ascii_lowercase())
+                        .unwrap_or_default();
+                    let alt_root = Path::new(&session.session_dir).join("assets");
+                    let candidates = plan
+                        .texture_candidates
+                        .into_iter()
+                        .map(|c| c.filename)
+                        .filter(|rel| !rel.to_ascii_lowercase().ends_with(&skip))
+                        .filter(|rel| is_likely_albedo_texture(rel))
+                        .collect::<Vec<_>>();
+                    let mut found_alternative = false;
+                    for rel in candidates {
+                        let entry = pkg
+                            .entries
+                            .iter()
+                            .find(|e| e.filename.eq_ignore_ascii_case(&rel))
+                            .cloned();
+                        let Some(entry) = entry else {
+                            continue;
+                        };
+                        let Ok(tex_path) = extract_entry_to_cache(&pkg, &entry, &alt_root) else {
+                            continue;
+                        };
+                        let Ok(Some(candidate_proxy)) =
+                            extract_playable_proxy_from_tex(&tex_path, &proxy_dir)
+                        else {
+                            continue;
+                        };
+                        if proxy_looks_suspicious(&candidate_proxy) {
+                            continue;
+                        }
+                        eprintln!(
+                            "[ok] gpu-play: using alternative tex proxy candidate: {} (from {})",
+                            candidate_proxy.display(),
+                            rel
+                        );
+                        proxy_from_tex = candidate_proxy;
+                        found_alternative = true;
+                        break;
+                    }
+                    if !found_alternative {
+                        eprintln!(
+                            "[warn] gpu-play: no safe albedo tex candidate found; keeping primary tex proxy (preview fallback disabled)"
+                        );
+                    }
+                }
+            }
             eprintln!(
                 "[warn] gpu-play: primary visual is .tex; extracted playable payload: {}",
                 proxy_from_tex.display()
             );
             proxy_from_tex.to_string_lossy().to_string()
-        } else if let Some(proxy) = preview_fallback.as_ref() {
-            eprintln!(
-                "[warn] gpu-play: .tex extraction unavailable; using preview fallback: {}",
-                proxy.display()
-            );
-            proxy.to_string_lossy().to_string()
         } else {
             bail!(
-                "gpu-play could not resolve playable entry from scene visual.\nSession manifest: {}",
+                "gpu-play could not resolve playable entry from scene visual (.tex extraction failed and preview fallback is disabled).\nSession manifest: {}",
                 session.manifest_path
             );
         }
-    } else if let Some(proxy) = preview_fallback.as_ref() {
-        proxy.to_string_lossy().to_string()
     } else {
         bail!(
             "gpu-play could not resolve playable entry.\nSession manifest: {}",
