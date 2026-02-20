@@ -6,8 +6,8 @@
 2. Crea y sube un tag:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 3. El workflow `.github/workflows/release.yml` compila y publica artefactos en GitHub Releases.
@@ -41,6 +41,6 @@ makepkg --printsrcinfo > .SRCINFO
 
 ```bash
 git add PKGBUILD .SRCINFO
-git commit -m "release: v0.2.0"
+git commit -m "release: v0.2.1"
 git push
 ```
