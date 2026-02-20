@@ -40,26 +40,32 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    #[command(about = "Instala dependencias del sistema requeridas por kitsune-livewallpaper")]
     InstallDependencies,
+    #[command(about = "Gestiona la configuracion por monitor en config.json")]
     Config {
         #[command(subcommand)]
         command: ConfigCommands,
     },
+    #[command(about = "Aplica configuraciones guardadas (solo monitores con cambios)")]
     StartConfig {
         #[arg(long, default_value_os_t = default_config_path())]
         config: PathBuf,
         #[arg(long)]
         dry_run: bool,
     },
+    #[command(about = "Instala/habilita/deshabilita el servicio de autostart de usuario")]
     ServiceAutostart {
         #[command(subcommand)]
         command: ServiceAutostartCommands,
     },
+    #[command(about = "Inspecciona metadatos de un wallpaper de Wallpaper Engine")]
     Inspect {
         wallpaper: String,
         #[arg(long, default_value_os_t = default_downloads_root())]
         downloads_root: PathBuf,
     },
+    #[command(about = "Vuelca el JSON crudo/normalizado de una escena")]
     SceneDump {
         wallpaper: String,
         #[arg(long, default_value_os_t = default_downloads_root())]
@@ -67,16 +73,19 @@ pub enum Commands {
         #[arg(long)]
         full: bool,
     },
+    #[command(about = "Genera un plan de render/reproduccion para una escena")]
     ScenePlan {
         wallpaper: String,
         #[arg(long, default_value_os_t = default_downloads_root())]
         downloads_root: PathBuf,
     },
+    #[command(about = "Genera plan de audio para una escena")]
     SceneAudioPlan {
         wallpaper: String,
         #[arg(long, default_value_os_t = default_downloads_root())]
         downloads_root: PathBuf,
     },
+    #[command(about = "Escanea libreria local y resume contenido de wallpapers")]
     LibraryScan {
         #[arg(long, default_value_os_t = default_downloads_root())]
         downloads_root: PathBuf,
@@ -85,12 +94,14 @@ pub enum Commands {
         #[arg(long)]
         summary_only: bool,
     },
+    #[command(about = "Genera roadmap/prioridades de procesamiento para la libreria")]
     LibraryRoadmap {
         #[arg(long, default_value_os_t = default_downloads_root())]
         downloads_root: PathBuf,
         #[arg(long, default_value_t = 15)]
         top_n: usize,
     },
+    #[command(about = "Simula runtime de escena y extrae telemetria basica")]
     SceneRuntime {
         wallpaper: String,
         #[arg(long, default_value_os_t = default_downloads_root())]
@@ -104,6 +115,7 @@ pub enum Commands {
         #[arg(long)]
         extract_music: bool,
     },
+    #[command(about = "Renderiza una escena a salida intermedia")]
     SceneRender {
         wallpaper: String,
         #[arg(long, default_value_os_t = default_downloads_root())]
@@ -115,16 +127,19 @@ pub enum Commands {
         #[arg(long, default_value_t = 50)]
         frame_ms: u64,
     },
+    #[command(about = "Inspecciona/visualiza grafo GPU de una escena")]
     SceneGpuGraph {
         wallpaper: String,
         #[arg(long, default_value_os_t = default_downloads_root())]
         downloads_root: PathBuf,
     },
+    #[command(about = "Planifica ruta de reproduccion nativa (sin proxy)")]
     SceneNativePlan {
         wallpaper: String,
         #[arg(long, default_value_os_t = default_downloads_root())]
         downloads_root: PathBuf,
     },
+    #[command(about = "Reproduce escena con pipeline GPU experimental")]
     SceneGpuPlay {
         wallpaper: String,
         #[arg(long)]
@@ -166,6 +181,7 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    #[command(about = "Actualiza overlays de texto (song/artist/clock)")]
     TextRefresh {
         #[arg(long)]
         spec: PathBuf,
@@ -174,6 +190,7 @@ pub enum Commands {
         #[arg(long, default_value_t = 1)]
         interval_seconds: u64,
     },
+    #[command(about = "Reproduce una escena de Wallpaper Engine como live wallpaper")]
     ScenePlay {
         wallpaper: String,
         #[arg(long)]
@@ -213,6 +230,7 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    #[command(about = "Reproduce un archivo de video como live wallpaper")]
     VideoPlay {
         video: String,
         #[arg(long)]
@@ -246,12 +264,14 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    #[command(about = "Prueba captura de audio desde fuente seleccionada")]
     AudioProbe {
         #[arg(long)]
         source: Option<String>,
         #[arg(long, default_value_t = 2)]
         seconds: u64,
     },
+    #[command(about = "Lee stream de audio en tiempo real para analisis/debug")]
     AudioStream {
         #[arg(long)]
         source: Option<String>,
@@ -260,18 +280,21 @@ pub enum Commands {
         #[arg(long, default_value_t = 50)]
         frame_ms: u64,
     },
+    #[command(about = "Detiene servicios en conflicto antes de iniciar wallpaper")]
     StopServices {
         #[arg(long = "service")]
         services: Vec<String>,
         #[arg(long)]
         dry_run: bool,
     },
+    #[command(about = "Inicia servicios de wallpaper hasta confirmar que quedan activos")]
     StartServices {
         #[arg(long = "service")]
         services: Vec<String>,
         #[arg(long)]
         dry_run: bool,
     },
+    #[command(about = "Aplica un wallpaper (auto: escena o video segun entrada)")]
     Apply {
         wallpaper: String,
         #[arg(long)]
@@ -297,6 +320,8 @@ pub enum Commands {
 
 #[derive(Subcommand)]
 pub enum ConfigCommands {
+    /// Agrega o actualiza config de monitor para video-play
+    #[command(about = "Agrega o actualiza config de monitor para video-play")]
     SetVideo {
         #[arg(long)]
         monitor: String,
@@ -329,6 +354,8 @@ pub enum ConfigCommands {
         #[arg(long, default_value_os_t = default_config_path())]
         config: PathBuf,
     },
+    /// Agrega o actualiza config de monitor para apply
+    #[command(about = "Agrega o actualiza config de monitor para apply")]
     SetApply {
         #[arg(long)]
         monitor: String,
@@ -349,12 +376,16 @@ pub enum ConfigCommands {
         #[arg(long, default_value_os_t = default_config_path())]
         config: PathBuf,
     },
+    /// Elimina la configuracion de un monitor
+    #[command(about = "Elimina la configuracion de un monitor")]
     Remove {
         #[arg(long)]
         monitor: String,
         #[arg(long, default_value_os_t = default_config_path())]
         config: PathBuf,
     },
+    /// Lista la configuracion actual por monitor
+    #[command(about = "Lista la configuracion actual por monitor")]
     List {
         #[arg(long, default_value_os_t = default_config_path())]
         config: PathBuf,
@@ -363,24 +394,34 @@ pub enum ConfigCommands {
 
 #[derive(Subcommand)]
 pub enum ServiceAutostartCommands {
+    /// Instala unit file de systemd --user para autostart
+    #[command(about = "Instala unit file de systemd --user para autostart")]
     Install {
         #[arg(long)]
         overwrite: bool,
         #[arg(long)]
         dry_run: bool,
     },
+    /// Habilita e inicia el servicio de autostart
+    #[command(about = "Habilita e inicia el servicio de autostart")]
     Enable {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Deshabilita y detiene el servicio de autostart
+    #[command(about = "Deshabilita y detiene el servicio de autostart")]
     Disable {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Elimina el unit file de autostart del usuario
+    #[command(about = "Elimina el unit file de autostart del usuario")]
     Remove {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Muestra estado del servicio/autostart
+    #[command(about = "Muestra estado del servicio/autostart")]
     Status,
 }
 
