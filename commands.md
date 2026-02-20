@@ -116,6 +116,118 @@ Este comando ejecuta el instalador de dependencias del proyecto. Busca el script
 - `scripts/install-deps.sh` (repo local)
 - `/usr/share/kitsune-livewallpaper/install-deps.sh` (instalacion por paquete)
 
+## 1.2) Config por monitor (`config`)
+
+Archivo por defecto:
+
+```bash
+~/.config/kitsune-livewallpaper/config.json
+```
+
+Agregar/actualizar monitor con `video-play`:
+
+```bash
+./target/debug/kitsune-livewallpaper config set-video \
+  --monitor DP-1 \
+  --video /ruta/video.mp4 \
+  --profile performance \
+  --seamless-loop \
+  --optimize \
+  --proxy-width 2560 \
+  --proxy-fps 30 \
+  --proxy-crf 24 \
+  --keep-services
+```
+
+Agregar/actualizar monitor con `apply`:
+
+```bash
+./target/debug/kitsune-livewallpaper config set-apply \
+  --monitor HDMI-A-1 \
+  --wallpaper 3299228616 \
+  --profile balanced \
+  --allow-scene-preview-fallback \
+  --keep-services
+```
+
+Quitar monitor:
+
+```bash
+./target/debug/kitsune-livewallpaper config remove --monitor HDMI-A-1
+```
+
+Listar config:
+
+```bash
+./target/debug/kitsune-livewallpaper config list
+```
+
+## 1.3) Arranque por config (`start-config`)
+
+Ejecuta solo monitores cuya configuración cambió (incremental):
+
+```bash
+./target/debug/kitsune-livewallpaper start-config
+```
+
+Dry-run:
+
+```bash
+./target/debug/kitsune-livewallpaper start-config --dry-run
+```
+
+## 1.4) Servicios (`start-services` / `stop-services`)
+
+Iniciar servicios requeridos:
+
+```bash
+./target/debug/kitsune-livewallpaper start-services
+```
+
+Detener servicios:
+
+```bash
+./target/debug/kitsune-livewallpaper stop-services
+```
+
+Con servicios personalizados:
+
+```bash
+./target/debug/kitsune-livewallpaper start-services --service swww-daemon.service --service kitowall-watch.service
+```
+
+## 1.5) Servicio de autostart (`service-autostart`)
+
+Instalar unit file de usuario:
+
+```bash
+./target/debug/kitsune-livewallpaper service-autostart install
+```
+
+Habilitar e iniciar:
+
+```bash
+./target/debug/kitsune-livewallpaper service-autostart enable
+```
+
+Deshabilitar/parar:
+
+```bash
+./target/debug/kitsune-livewallpaper service-autostart disable
+```
+
+Eliminar del sistema de usuario:
+
+```bash
+./target/debug/kitsune-livewallpaper service-autostart remove
+```
+
+Estado:
+
+```bash
+./target/debug/kitsune-livewallpaper service-autostart status
+```
+
 ## 2) Comandos disponibles (demo/en desarrollo)
 
 Los siguientes comandos existen en el binario, pero se consideran de demo/proceso de desarrollo:
@@ -135,7 +247,6 @@ Los siguientes comandos existen en el binario, pero se consideran de demo/proces
 - `scene-play`
 - `audio-probe`
 - `audio-stream`
-- `stop-services`
 - `apply`
 
 Ayuda general:

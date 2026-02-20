@@ -20,6 +20,7 @@ pub mod scene_runtime;
 pub mod scene_script;
 pub mod scene_text;
 pub mod services;
+pub mod startup_config;
 pub mod tex_payload;
 pub mod types;
 pub mod video_opt;
@@ -27,7 +28,7 @@ pub mod video_tune;
 pub mod wallpaper;
 
 use audio::{probe_audio, stream_audio_levels};
-use cli::{Cli, Commands};
+use cli::{Cli, Commands, ConfigCommands, ServiceAutostartCommands};
 use library_scan::{build_library_roadmap, scan_library};
 use playback::{launch_mpvpaper, launch_mpvpaper_with_extra, stop_existing_mpvpaper_for_monitor};
 use scene_effect_proxy::{build_scene_audio_bars_overlay, maybe_build_scene_animated_proxy};
@@ -43,7 +44,15 @@ use scene_runtime::run_scene_runtime;
 use scene_text::{
     build_scene_drawtext_filter, run_text_refresh, run_text_refresh_loop, start_text_refresh_daemon,
 };
-use services::{default_services, stop_services};
+use services::{
+    autostart_service_status, default_services, disable_autostart_service, enable_autostart_service,
+    install_autostart_service, remove_autostart_service, start_services, stop_services,
+};
+use startup_config::{
+    MonitorEntry, StartupCommand, entry_fingerprint, load_config as load_startup_config,
+    load_state as load_startup_state, remove_entry as remove_startup_entry,
+    save_config as save_startup_config, save_state as save_startup_state, upsert_entry,
+};
 use tex_payload::extract_playable_proxy_from_tex;
 use types::{SceneDiagnostics, WallpaperType};
 use video_opt::{maybe_build_loop_crossfade_proxy, maybe_build_optimized_proxy};
@@ -107,6 +116,67 @@ fn find_install_deps_script() -> Option<std::path::PathBuf> {
     candidates.into_iter().find(|p| p.is_file())
 }
 
+fn run_startup_entry(entry: &MonitorEntry, dry_run: bool) -> Result<()> {
+    match &entry.command {
+        StartupCommand::Video {
+            video,
+            downloads_root,
+            keep_services,
+            mute_audio,
+            profile,
+            display_fps,
+            seamless_loop,
+            loop_crossfade,
+            loop_crossfade_seconds,
+            optimize,
+            proxy_width,
+            proxy_fps,
+            proxy_crf,
+        } => run(Cli {
+            command: Commands::VideoPlay {
+                video: video.clone(),
+                monitor: entry.monitor.clone(),
+                downloads_root: downloads_root.clone(),
+                keep_services: *keep_services,
+                services: Vec::new(),
+                mute_audio: *mute_audio,
+                profile: *profile,
+                display_fps: *display_fps,
+                seamless_loop: *seamless_loop,
+                loop_crossfade: *loop_crossfade,
+                loop_crossfade_seconds: *loop_crossfade_seconds,
+                optimize: *optimize,
+                proxy_width: *proxy_width,
+                proxy_fps: *proxy_fps,
+                proxy_crf: *proxy_crf,
+                dry_run,
+            },
+        }),
+        StartupCommand::Apply {
+            wallpaper,
+            downloads_root,
+            keep_services,
+            mute_audio,
+            profile,
+            display_fps,
+            allow_scene_preview_fallback,
+        } => run(Cli {
+            command: Commands::Apply {
+                wallpaper: wallpaper.clone(),
+                monitor: entry.monitor.clone(),
+                downloads_root: downloads_root.clone(),
+                keep_services: *keep_services,
+                services: Vec::new(),
+                mute_audio: *mute_audio,
+                profile: *profile,
+                display_fps: *display_fps,
+                allow_scene_preview_fallback: *allow_scene_preview_fallback,
+                dry_run,
+            },
+        }),
+    }
+}
+
 pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::InstallDependencies => {
@@ -125,6 +195,142 @@ pub fn run(cli: Cli) -> Result<()> {
             }
             Ok(())
         }
+        Commands::Config { command } => match command {
+            ConfigCommands::SetVideo {
+                monitor,
+                video,
+                downloads_root,
+                keep_services,
+                mute_audio,
+                profile,
+                display_fps,
+                seamless_loop,
+                loop_crossfade,
+                loop_crossfade_seconds,
+                optimize,
+                proxy_width,
+                proxy_fps,
+                proxy_crf,
+                config,
+            } => {
+                let mut cfg = load_startup_config(&config)?;
+                upsert_entry(
+                    &mut cfg,
+                    MonitorEntry {
+                        monitor: monitor.clone(),
+                        command: StartupCommand::Video {
+                            video,
+                            downloads_root,
+                            keep_services,
+                            mute_audio,
+                            profile,
+                            display_fps,
+                            seamless_loop,
+                            loop_crossfade,
+                            loop_crossfade_seconds,
+                            optimize,
+                            proxy_width,
+                            proxy_fps,
+                            proxy_crf,
+                        },
+                    },
+                );
+                save_startup_config(&config, &cfg)?;
+                println!("[ok] updated config for monitor={} file={}", monitor, config.display());
+                Ok(())
+            }
+            ConfigCommands::SetApply {
+                monitor,
+                wallpaper,
+                downloads_root,
+                keep_services,
+                mute_audio,
+                profile,
+                display_fps,
+                allow_scene_preview_fallback,
+                config,
+            } => {
+                let mut cfg = load_startup_config(&config)?;
+                upsert_entry(
+                    &mut cfg,
+                    MonitorEntry {
+                        monitor: monitor.clone(),
+                        command: StartupCommand::Apply {
+                            wallpaper,
+                            downloads_root,
+                            keep_services,
+                            mute_audio,
+                            profile,
+                            display_fps,
+                            allow_scene_preview_fallback,
+                        },
+                    },
+                );
+                save_startup_config(&config, &cfg)?;
+                println!("[ok] updated config for monitor={} file={}", monitor, config.display());
+                Ok(())
+            }
+            ConfigCommands::Remove { monitor, config } => {
+                let mut cfg = load_startup_config(&config)?;
+                if remove_startup_entry(&mut cfg, &monitor) {
+                    save_startup_config(&config, &cfg)?;
+                    println!("[ok] removed monitor={} from {}", monitor, config.display());
+                } else {
+                    println!(
+                        "[ok] monitor={} was not present in {}",
+                        monitor,
+                        config.display()
+                    );
+                }
+                Ok(())
+            }
+            ConfigCommands::List { config } => {
+                let cfg = load_startup_config(&config)?;
+                println!("{}", serde_json::to_string_pretty(&cfg)?);
+                Ok(())
+            }
+        },
+        Commands::StartConfig { config, dry_run } => {
+            let cfg = load_startup_config(&config)?;
+            let mut state = load_startup_state()?;
+            let mut changed = 0usize;
+            let mut skipped = 0usize;
+            for entry in &cfg.entries {
+                let fp = entry_fingerprint(entry);
+                let prev = state.monitor_fingerprints.get(&entry.monitor).copied();
+                if prev == Some(fp) {
+                    skipped += 1;
+                    println!("[ok] unchanged monitor={}, skipped", entry.monitor);
+                    continue;
+                }
+
+                println!("[ok] applying monitor={} from config", entry.monitor);
+                run_startup_entry(entry, dry_run)?;
+                if !dry_run {
+                    state.monitor_fingerprints.insert(entry.monitor.clone(), fp);
+                }
+                changed += 1;
+            }
+            if !dry_run {
+                save_startup_state(&state)?;
+            }
+            println!(
+                "[ok] start-config done changed={} unchanged={} total={}",
+                changed,
+                skipped,
+                cfg.entries.len()
+            );
+            Ok(())
+        }
+        Commands::ServiceAutostart { command } => match command {
+            ServiceAutostartCommands::Install { overwrite, dry_run } => {
+                install_autostart_service(overwrite, dry_run)
+            }
+            ServiceAutostartCommands::Enable { dry_run } => enable_autostart_service(dry_run),
+            ServiceAutostartCommands::Disable { dry_run } => disable_autostart_service(dry_run),
+            ServiceAutostartCommands::Remove { dry_run } => remove_autostart_service(dry_run),
+            ServiceAutostartCommands::Status => autostart_service_status(),
+        },
         Commands::Inspect {
             wallpaper,
             downloads_root,
@@ -664,6 +870,14 @@ pub fn run(cli: Cli) -> Result<()> {
                 services
             };
             stop_services(&services, dry_run)
+        }
+        Commands::StartServices { services, dry_run } => {
+            let services = if services.is_empty() {
+                default_services()
+            } else {
+                services
+            };
+            start_services(&services, dry_run)
         }
         Commands::Apply {
             wallpaper,
