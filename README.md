@@ -39,6 +39,12 @@ Replicar progresivamente el flujo de Wallpaper Engine (Windows) con un motor pro
 
 Este script instala y valida las dependencias de ejecucion principales (`rustup/cargo`, `ffmpeg`, `ffprobe`, `mpvpaper`, `pactl`, `parec`, `pgrep`, `lspci`, `lscpu`) en distros compatibles.
 
+Tambien disponible como subcomando del binario:
+
+```bash
+kitsune-livewallpaper install-dependencies
+```
+
 ## Variables de entorno (Linux/Arch)
 
 ```bash

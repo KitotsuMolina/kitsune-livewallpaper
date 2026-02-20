@@ -38,6 +38,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    InstallDependencies,
     Inspect {
         wallpaper: String,
         #[arg(long, default_value_os_t = default_downloads_root())]

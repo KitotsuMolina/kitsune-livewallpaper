@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::process::Command;
 
 pub mod asset_resolver;
 pub mod audio;
@@ -98,8 +99,32 @@ fn default_video_live_cache_root() -> std::path::PathBuf {
     std::path::PathBuf::from("/tmp/kitsune-livewallpaper/video-live")
 }
 
+fn find_install_deps_script() -> Option<std::path::PathBuf> {
+    let candidates = [
+        std::path::PathBuf::from("scripts/install-deps.sh"),
+        std::path::PathBuf::from("/usr/share/kitsune-livewallpaper/install-deps.sh"),
+    ];
+    candidates.into_iter().find(|p| p.is_file())
+}
+
 pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        Commands::InstallDependencies => {
+            let script = find_install_deps_script().context(
+                "install-dependencies script not found. Expected scripts/install-deps.sh or /usr/share/kitsune-livewallpaper/install-deps.sh",
+            )?;
+            let status = Command::new("bash")
+                .arg(&script)
+                .status()
+                .with_context(|| format!("Failed to run {}", script.display()))?;
+            if !status.success() {
+                bail!(
+                    "Dependency installer exited with non-zero status: {:?}",
+                    status.code()
+                );
+            }
+            Ok(())
+        }
         Commands::Inspect {
             wallpaper,
             downloads_root,

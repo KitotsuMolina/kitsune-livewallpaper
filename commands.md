@@ -104,6 +104,18 @@ hyprctl -j monitors | jq -r '.[].name' | while IFS= read -r m; do
 done
 ```
 
+## 1.1) Utilidad estable: `install-dependencies`
+
+Uso:
+
+```bash
+./target/debug/kitsune-livewallpaper install-dependencies
+```
+
+Este comando ejecuta el instalador de dependencias del proyecto. Busca el script en:
+- `scripts/install-deps.sh` (repo local)
+- `/usr/share/kitsune-livewallpaper/install-deps.sh` (instalacion por paquete)
+
 ## 2) Comandos disponibles (demo/en desarrollo)
 
 Los siguientes comandos existen en el binario, pero se consideran de demo/proceso de desarrollo:
