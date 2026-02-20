@@ -31,6 +31,14 @@ Replicar progresivamente el flujo de Wallpaper Engine (Windows) con un motor pro
 
 ## Comandos principales
 
+### Instalar dependencias (un solo comando)
+
+```bash
+./scripts/install-deps.sh
+```
+
+Este script instala y valida las dependencias de ejecucion principales (`rustup/cargo`, `ffmpeg`, `ffprobe`, `mpvpaper`, `pactl`, `parec`, `pgrep`, `lspci`, `lscpu`) en distros compatibles.
+
 ## Variables de entorno (Linux/Arch)
 
 ```bash
